@@ -6,10 +6,19 @@ import {
   placeOrder,
 } from "../controllers/orderController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+
 const router = express.Router();
-router.post("/user/orderitem", authMiddleware, placeOrder);
-router.get("/user/myorders", authMiddleware, getOrdersByUser);
-router.get("/user/myorders/order/:orderId", authMiddleware, getOrderById);
-router.delete("/user/myorders/ordercancel/:orderId", authMiddleware, cancelOrder);
+
+// Place an order
+router.post("/user/orders", authMiddleware, placeOrder);
+
+// Get all orders of logged-in user
+router.get("/user/orders", authMiddleware, getOrdersByUser);
+
+// Get a single order
+router.get("/user/orders/:orderId", authMiddleware, getOrderById);
+
+// Cancel an order
+router.delete("/user/orders/:orderId", authMiddleware, cancelOrder);
 
 export default router;

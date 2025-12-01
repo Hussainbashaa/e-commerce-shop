@@ -7,22 +7,30 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
     items: [
       {
-        productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-        name: String,
-        image: String,
-        quantity: Number,
-        price: Number,
+        productId: {
+          type: String, // FIXED!
+          required: false,
+        },
+        name: { type: String, required: true },
+        image: { type: String, default: null },
+        images: { type: [String], default: [] },
+        quantity: { type: Number, required: true },
+        price: { type: Number, required: true },
       },
     ],
+
     totalPrice: { type: Number, required: true },
     deliveryAddress: { type: String, required: true },
+
     paymentMethod: {
       type: String,
       enum: ["COD", "UPI", "Card"],
       required: true,
     },
+
     status: {
       type: String,
       enum: [

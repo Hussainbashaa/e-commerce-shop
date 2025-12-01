@@ -8,15 +8,20 @@ import {
 } from "../controllers/userController.js";
 
 const router = express.Router();
-//! create a user
-router.post("/user/create", createUsers);
-//! get all users
-router.get("/user/allusers", getAllUsers);
-//! get single user by id
-router.get("/user/allusers/:id", getUserById);
-//! update user by id
-router.put("/user/update/:id", updateUserById);
-//! delete user by id
-router.delete("/user/delete/:id", deleteUserById);
+
+// Create new user (Signup) api/users
+router.post("/users", createUsers);
+
+// Get all users
+router.get("/users", getAllUsers);
+
+// Get user by ID
+router.get("/users/:id", getUserById);
+
+// Update user by ID
+router.put("/users/:id", updateUserById);
+
+// Delete user by ID
+router.delete("/users/:id", deleteUserById);
 
 export default router;

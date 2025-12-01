@@ -25,13 +25,12 @@ app.use(
   })
 );
 
-// connect mongo
 mongoose
   .connect(process.env.MONGO_URL, {
     dbName: "Nodejs_practice_shop",
   })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((error) => console.log("❌ MongoDB connection error:", error));
+  .then(() => console.log(" MongoDB connected"))
+  .catch((error) => console.log(" MongoDB connection error:", error));
 
 // routes
 app.use("/api", UserRouter);
@@ -42,5 +41,5 @@ app.use("/api", authRouters);
 app.use("/api/admin", adminAuthRoutes);
 
 app.listen(process.env.PORT, () => {
-  console.log(`🚀 Server running on port ${process.env.PORT}`);
+  console.log(` Server running on port ${process.env.PORT}`);
 });

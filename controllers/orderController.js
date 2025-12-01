@@ -2,27 +2,60 @@ import { Order } from "../models/Order.js";
 import { Cart } from "../models/Cart.js";
 import { Payment } from "../models/Payment.js";
 
-//! place an order
-
+// -----------------------------------------------------
+// PLACE ORDER
+// -----------------------------------------------------
 export const placeOrder = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { deliveryAddress, paymentMethod, upiId, cardDetails } = req.body;
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
 
-    const cart = await Cart.findOne({ userId });
-    if (!cart || cart.items.length === 0) {
+    const {
+      deliveryAddress,
+      paymentMethod,
+      upiId,
+      cardDetails,
+      items,
+      totalAmount,
+    } = req.body;
+
+    // Log to debug
+    console.log("📦 Incoming Order:", req.body);
+    console.log("🟦 Auth User:", req.user);
+
+    // ---- Fetch cart from DB ----
+    let cart = await Cart.findOne({ userId });
+
+    // If DB cart empty → use frontend items
+    if ((!cart || cart.items.length === 0) && items?.length > 0) {
+      cart = {
+        items: items.map((i) => ({
+          productId: i.productId,
+          name: i.title || i.name, // FIXED — always give name
+          price: i.price,
+          quantity: i.quantity,
+          image: i.image || null,
+          images: i.images || [],
+        })),
+        totalPrice: totalAmount,
+      };
+    }
+
+    // Still empty → reject
+    if (!cart || !cart.items || cart.items.length === 0) {
       return res.status(400).json({ message: "Your cart is empty!" });
     }
 
-    // Validate required fields
     if (!deliveryAddress || !paymentMethod) {
-      return res
-        .status(400)
-        .json({ message: "deliveryAddress and paymentMethod are required" });
+      return res.status(400).json({
+        message: "deliveryAddress & paymentMethod required",
+      });
     }
 
-    // Create the order first (for all methods)
-    const newOrder = new Order({
+    // ---- CREATE ORDER ----
+    const newOrder = await Order.create({
       userId,
       items: cart.items,
       totalPrice: cart.totalPrice,
@@ -31,99 +64,95 @@ export const placeOrder = async (req, res) => {
       status: paymentMethod === "COD" ? "Pending" : "Processing",
     });
 
-    await newOrder.save();
-
-    // Handle payment logic
-    let payment;
+    // ---- PAYMENT ----
+    let paymentInfo = {
+      orderId: newOrder._id,
+      userId,
+      amount: cart.totalPrice,
+      paymentMethod,
+    };
 
     if (paymentMethod === "COD") {
-      payment = await Payment.create({
-        orderId: newOrder._id,
-        userId,
-        amount: cart.totalPrice,
-        paymentMethod,
-        paymentStatus: "Pending",
-        transactionId: null,
-      });
-    } else if (paymentMethod === "UPI") {
-      if (!upiId) {
-        return res
-          .status(400)
-          .json({ message: "UPI ID is required for UPI payments" });
-      }
-
-      payment = await Payment.create({
-        orderId: newOrder._id,
-        userId,
-        amount: cart.totalPrice,
-        paymentMethod,
-        paymentStatus: "Completed",
-        upiId,
-        transactionId: "TXN-" + Date.now().toString(),
-      });
-    } else if (paymentMethod === "Card") {
-      if (!cardDetails || !cardDetails.cardNumber) {
-        return res
-          .status(400)
-          .json({ message: "Card details are required for card payments" });
-      }
-
-      payment = await Payment.create({
-        orderId: newOrder._id,
-        userId,
-        amount: cart.totalPrice,
-        paymentMethod,
-        paymentStatus: "Completed",
-        cardDetails,
-        transactionId: "TXN-" + Date.now().toString(),
-      });
-    } else {
-      return res.status(400).json({ message: "Invalid payment method" });
+      paymentInfo.paymentStatus = "Pending";
     }
 
-    // Clear cart after order & payment success
-    cart.items = [];
-    cart.totalPrice = 0;
-    await cart.save();
+    if (paymentMethod === "UPI") {
+      if (!upiId)
+        return res.status(400).json({ message: "UPI ID is required" });
+
+      paymentInfo.paymentStatus = "Completed";
+      paymentInfo.upiId = upiId;
+      paymentInfo.transactionId = "TXN-" + Date.now();
+    }
+
+    if (paymentMethod === "Card") {
+      if (!cardDetails?.cardNumber)
+        return res.status(400).json({ message: "Card details missing" });
+
+      paymentInfo.paymentStatus = "Completed";
+      paymentInfo.cardDetails = cardDetails;
+      paymentInfo.transactionId = "TXN-" + Date.now();
+    }
+
+    const payment = await Payment.create(paymentInfo);
+
+    // ---- CLEAR DB CART ----
+    if (cart?._id) {
+      cart.items = [];
+      cart.totalPrice = 0;
+      await cart.save();
+    }
 
     return res.status(201).json({
       success: true,
-      message:
-        paymentMethod === "COD"
-          ? "Order placed successfully with Cash on Delivery!"
-          : "Payment successful, order is being processed!",
+      message: "Order placed successfully",
       order: newOrder,
       payment,
+    });
+  } catch (err) {
+    console.error("ORDER ERROR:", err);
+    res.status(500).json({ message: "Server Error", error: err.message });
+  }
+};
+
+// -----------------------------------------------------
+// GET ORDERS BY USER
+// -----------------------------------------------------
+export const getOrdersByUser = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const orders = await Order.find({ userId }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      orders,
     });
   } catch (err) {
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 
-//! get users orders
-export const getOrdersByUser = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const orders = await Order.find({ userId }).sort({ createdAt: -1 });
-    res.status(200).json({ message: "your orders", success: true, orders });
-  } catch (err) {
-    res.status(500).json({ message: "Server Error", error: err.message });
-  }
-};
-//! get order by an id
+// -----------------------------------------------------
+// GET ORDER BY ID
+// -----------------------------------------------------
 export const getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
+
     const order = await Order.findById(orderId);
+
     if (!order) return res.status(404).json({ message: "Order not found" });
+
     res.status(200).json({ success: true, order });
   } catch (err) {
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 
-//!update order status
-
+// -----------------------------------------------------
+// UPDATE ORDER STATUS (Admin)
+// -----------------------------------------------------
 export const updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -135,33 +164,42 @@ export const updateOrderStatus = async (req, res) => {
     order.status = status;
     await order.save();
 
-    res
-      .status(200)
-      .json({ success: true, message: "Order status updated", order });
+    res.status(200).json({
+      success: true,
+      message: "Order status updated",
+      order,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 
-//! Cancel order
+// -----------------------------------------------------
+// CANCEL ORDER
+// -----------------------------------------------------
 export const cancelOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user._id;
 
     const order = await Order.findOne({ _id: orderId, userId });
+
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     if (order.status !== "Pending") {
-      return res
-        .status(400)
-        .json({ message: "You can only cancel pending orders" });
+      return res.status(400).json({
+        message: "Only pending orders can be cancelled",
+      });
     }
 
     order.status = "Cancelled";
     await order.save();
 
-    res.status(200).json({ success: true, message: "Order cancelled", order });
+    res.status(200).json({
+      success: true,
+      message: "Order cancelled",
+      order,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server Error", error: err.message });
   }

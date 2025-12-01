@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const paymentSchema = new mongoose.Schema(
   {
     orderId: {
@@ -6,32 +7,46 @@ const paymentSchema = new mongoose.Schema(
       ref: "Order",
       required: true,
     },
+
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
     amount: {
       type: Number,
       required: true,
     },
+
     paymentMethod: {
       type: String,
       enum: ["COD", "UPI", "Card"],
       required: true,
     },
+
     paymentStatus: {
       type: String,
       enum: ["Pending", "Completed", "Ongoing", "Failed"],
       default: "Pending",
     },
+
+    // UPI Payments
     upiId: {
       type: String,
+      default: null,
     },
+
+    // Card Payments — Never store CVV in production!!
     cardDetails: {
-      cardNumber: String,
-      expiryDate: String,
-      cvv: String,
+      cardNumber: { type: String, default: null },
+      name: { type: String, default: null },
+      expiry: { type: String, default: null },
+    },
+
+    transactionId: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }
